@@ -1,0 +1,2 @@
+- TailwindCSS v11
+- Lucide React

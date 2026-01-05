@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Net.Http;
 using System.Text.Json;
 using MyBackend.Models;
@@ -9,8 +10,9 @@ namespace MyBackend.Services
     {
         // Im using VolunteerConnector as my data source for volunteer opportunities, they don't have proper querying so I will filter manually
         private readonly HttpClient _httpClient; // To make API requests to connector
+        private readonly SemaphoreSlim _refreshLock = new SemaphoreSlim(1, 1); // To protect cache access
 
-        // Cache to store all opportunities in memory
+        // Store all opportunities in memory
         private List<VolunteerOpportunity>? _cachedResults;
         private readonly TimeSpan _cacheDuration = TimeSpan.FromHours(3);
         private DateTime _lastCacheTime = DateTime.MinValue;
@@ -26,91 +28,105 @@ namespace MyBackend.Services
         // This method fetches all volunteer opportunities and stores them in the cache
         public async Task<List<VolunteerOpportunity>> GetVolunteerOpportunitiesAsync(bool showProgress = false)
         {
-            // Return cached results if cache is valid
             if (_cachedResults != null && (DateTime.UtcNow - _lastCacheTime) < _cacheDuration)
             {
                 return _cachedResults;
             }
 
-            var bag = new List<VolunteerOpportunity>();
-            _lastCacheTime = DateTime.UtcNow;
-
-            int totalPages = 160;
-            int completedPages = 0;
-
-            var tasks = new List<Task>();
-            var semaphore = new SemaphoreSlim(10); // limit to 10 concurrent requests
-
-            // Fetches data from VolunteerConnector API in parallel with limited concurrency
-            for (int page = 1; page <= totalPages; page++)
+            await _refreshLock.WaitAsync(); // This ensures only one refresh at a time
+            try
             {
-                int currentPage = page; // capture loop variable
-                tasks.Add(Task.Run(async () =>
+                // Double-check locking
+                if (_cachedResults != null && (DateTime.UtcNow - _lastCacheTime) < _cacheDuration)
                 {
-                    await semaphore.WaitAsync(); // acquire slot
-                    try
+                    return _cachedResults;
+                }
+
+                var bag = new List<VolunteerOpportunity>();
+
+                int totalPages = 160;
+                int completedPages = 0;
+
+                var tasks = new List<Task>();
+                var semaphore = new SemaphoreSlim(10); // limit to 10 concurrent requests
+
+                // Fetches data from VolunteerConnector API in parallel with limited concurrency
+                for (int page = 1; page <= totalPages; page++)
+                {
+                    int currentPage = page;
+                    tasks.Add(Task.Run(async () =>
                     {
-                        string url = $"https://www.volunteerconnector.org/api/search/?page={currentPage}";
-                        var response = await _httpClient.GetStringAsync(url);
-
-                        // Parse JSON response
-                        var doc = JsonDocument.Parse(response);
-                        var results = doc.RootElement.GetProperty("results");
-
-                        // Iterate over each volunteer opportunity in the page
-                        foreach (var item in results.EnumerateArray())
+                        await semaphore.WaitAsync(); // acquire slot
+                        try
                         {
-                            var opportunity = new VolunteerOpportunity
-                            {
-                                Id = item.GetProperty("id").GetInt32(), // Unique ID
-                                Title = item.GetProperty("title").GetString() ?? "",
-                                Description = item.GetProperty("description").GetString() ?? "",
-                                Region = InferRegion(item), // Determine region from audience
-                                DurationHours = InferDurationHours(item.GetProperty("duration").GetString() ?? ""), // Parse duration
-                                Organization = item.GetProperty("organization").GetProperty("name").GetString() ?? "Unknown",
-                                OrganizationLogoUrl = item.GetProperty("organization").GetProperty("logo").GetString() ?? "N/A",
-                                IsRemote = item.GetProperty("remote_or_online").GetBoolean(),
-                                Interests = InferInterests(item.GetProperty("description").GetString() ?? ""), // Extract keywords
-                                Ages = InferAges(item.GetProperty("description").GetString() ?? "") // Infer ages from description
-                            };
+                            string url = $"https://www.volunteerconnector.org/api/search/?page={currentPage}";
+                            var response = await _httpClient.GetStringAsync(url);
 
-                            lock (bag) // make thread-safe
+                            // Parse JSON response
+                            var doc = JsonDocument.Parse(response);
+                            var results = doc.RootElement.GetProperty("results");
+
+                            // Iterate over each volunteer opportunity in the page
+                            foreach (var item in results.EnumerateArray())
                             {
-                                bag.Add(opportunity);
+                                var opportunity = new VolunteerOpportunity
+                                {
+                                    Id = item.GetProperty("id").GetInt32(), // Unique ID
+                                    Title = item.GetProperty("title").GetString() ?? "",
+                                    Description = item.GetProperty("description").GetString() ?? "",
+                                    Region = InferRegion(item),
+                                    DurationHours = InferDurationHours(item.GetProperty("duration").GetString() ?? ""),
+                                    Organization = item.GetProperty("organization").GetProperty("name").GetString() ?? "Unknown",
+                                    OrganizationWebUrl = item.GetProperty("organization").GetProperty("url").GetString() ?? "",
+                                    OrganizationLogoUrl = item.GetProperty("organization").GetProperty("logo").GetString() ?? "N/A",
+                                    IsRemote = item.GetProperty("remote_or_online").GetBoolean(),
+                                    Interests = InferInterests(item.GetProperty("description").GetString() ?? ""), // Extract keywords
+                                    Ages = InferAges(item.GetProperty("description").GetString() ?? "") // Infer ages from description
+                                };
+
+                                lock (bag) // make thread-safe
+                                {
+                                    bag.Add(opportunity);
+                                }
+                            }
+
+                            if (showProgress)
+                            {
+                                lock (bag)
+                                {
+                                    completedPages++;
+                                    Console.WriteLine($"Loading: ({completedPages * 100 / totalPages}%)");
+                                }
                             }
                         }
-
-                        if (showProgress)
+                        catch (Exception ex)
                         {
-                            lock (bag)
-                            {
-                                completedPages++;
-                                Console.WriteLine($"Loaded page {currentPage}/{totalPages} ({completedPages * 100 / totalPages}%)");
-                            }
+                            Console.WriteLine($"Error fetching page {currentPage}: {ex.Message}");
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error fetching page {currentPage}: {ex.Message}");
-                    }
-                    finally
-                    {
-                        semaphore.Release(); // release slot
-                    }
-                }));
+                        finally
+                        {
+                            semaphore.Release(); // release slot
+                        }
+                    }));
+                }
+
+                await Task.WhenAll(tasks);
+
+                // Update cache
+                _cachedResults = bag;
+                _lastCacheTime = DateTime.UtcNow;
+
+                if (showProgress)
+                {
+                    Console.WriteLine($"Preloading complete. Total opportunities loaded: {_cachedResults.Count}");
+                }
+
+                return _cachedResults;
             }
-
-            await Task.WhenAll(tasks);
-
-            // Update cache
-            _cachedResults = bag;
-
-            if (showProgress)
+            finally
             {
-                Console.WriteLine($"Preloading complete. Total opportunities loaded: {_cachedResults.Count}");
+                _refreshLock.Release();
             }
-
-            return _cachedResults;
         }
 
         // Converts duration strings like "10-20 hours / weekly" into a single int (minimum hours)
@@ -123,7 +139,9 @@ namespace MyBackend.Services
 
             var digits = new string(duration.TakeWhile(c => char.IsDigit(c) || c == '-').ToArray());
             if (digits.Contains('-'))
+            {
                 return int.Parse(digits.Split('-')[0]); // Take minimum hours
+            }
             return int.TryParse(digits, out int h) ? h : 0;
         }
 
@@ -152,7 +170,7 @@ namespace MyBackend.Services
                 { "Sports & Recreation", new[] { "sports", "recreation", "fitness", "coaching", "outdoors" } },
                 { "Fundraising/Accounting", new[] { "fundraising", "donor", "accountant", "accounting", "bookkeeping" } },
                 { "Event Support", new[] { "event", "festival", "fair", "conference", "setup", "support" } },
-                { "Programming", new[] { "programming", "developer", "software", "coding", "web", "tech", "c#", "python", "web dev", "html" } },
+                { "Programming", new[] { "programming", "developer", "software", "coding", "tech", "c#", "python", "web dev", "html" } },
             };
 
             // Check each keyword

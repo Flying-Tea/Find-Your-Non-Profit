@@ -9,6 +9,7 @@ builder.Services.AddControllers();
 builder.Services.AddHttpClient<VolunteerService>(); // register VolunteerService with HttpClient
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(); // Added Swagger generation
+builder.Services.AddMemoryCache(); // Memory caching
 
 builder.Services.AddHttpClient<VolunteerService>();
 builder.Services.AddSingleton<VolunteerService>();

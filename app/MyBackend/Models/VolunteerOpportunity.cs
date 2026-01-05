@@ -11,9 +11,12 @@ namespace MyBackend.Models
         public int DurationHours { get; set; }
 
         public string Organization { get; set; } = "";
+        public string OrganizationWebUrl { get; set; } = "";
         public string OrganizationLogoUrl { get; set; } = "";
 
         public bool IsRemote { get; set; }
+
+        public List<string> WhyMatched { get; set; } = new();
 
         public List<string> Interests { get; set; } = new();
         public List<string> Ages { get; set; } = new();
