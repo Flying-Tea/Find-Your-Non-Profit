@@ -9,6 +9,8 @@ export interface VolunteerOpportunity {
     interests: string[];
     ages: string[];
     organizationWebUrl: string;
+    organizationLogoUrl: string;
+    whyMatched: string;
 }
 
 export type SearchParams = {
@@ -30,11 +32,17 @@ export async function searchVolunteers(params: SearchParams) {
     if (params.isRemote) query.append("isRemote", "true");
     if (params.q) query.append("q", params.q);
 
-    const res = await fetch(`http://localhost:5062/api/Volunteer/search?${query.toString()}`);
+    try{
+        const res = await fetch(`http://localhost:5062/api/Volunteer/search?${query.toString()}`);
 
-    if (!res.ok) {
-        throw new Error("Failed to fetch opportunities");
+        if (!res.ok) {
+            throw new Error("Failed to fetch opportunities");
+        }
+        
+
+        return res.json() as Promise<VolunteerOpportunity[]>;
+    } catch {
+        return[];
     }
 
-    return res.json() as Promise<VolunteerOpportunity[]>;
 }

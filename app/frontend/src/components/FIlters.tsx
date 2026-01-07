@@ -4,9 +4,14 @@ import type { SearchParams } from "../api/VolunteerAPI";
 const INTERESTS = [
     "Environment",
     "Education",
+    "Tutor",
     "Healthcare",
     "Animal Welfare",
     "Community Development",
+    "Arts & Culture",
+    "Sports & Recreation",
+    "Fundraising/Accounting",
+    "Event Support",
     "Programming",
 ];
 

@@ -41,9 +41,17 @@ namespace MyBackend.Controllers
                         .ToList();
 
                     if (matchedInterests.Count == 0)
+                    {
                         continue;
-
-                    reasons.Add($"Matches your interest in {string.Join(", ", matchedInterests)}");
+                    } 
+                    if (matchedInterests.Count <= 1)
+                    {
+                        reasons.Add($"Matches your interest in {string.Join(" and ", matchedInterests)}");
+                    } else
+                    {
+                        reasons.Add($"Matches your interest in {string.Join(", ", matchedInterests.Take(matchedInterests.Count - 1))} and {matchedInterests.Last()}");
+                    }
+                    
                 }
 
                 // Region filter

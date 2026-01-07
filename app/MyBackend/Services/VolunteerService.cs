@@ -28,6 +28,9 @@ namespace MyBackend.Services
         // This method fetches all volunteer opportunities and stores them in the cache
         public async Task<List<VolunteerOpportunity>> GetVolunteerOpportunitiesAsync(bool showProgress = false)
         {
+            int page = 1;
+
+            // If cache is still valid, return it
             if (_cachedResults != null && (DateTime.UtcNow - _lastCacheTime) < _cacheDuration)
             {
                 return _cachedResults;
@@ -49,11 +52,13 @@ namespace MyBackend.Services
 
                 var tasks = new List<Task>();
                 var semaphore = new SemaphoreSlim(10); // limit to 10 concurrent requests
+                var consoleLock = new object();        // ensure clean console output
 
                 // Fetches data from VolunteerConnector API in parallel with limited concurrency
-                for (int page = 1; page <= totalPages; page++)
+                for (; page <= totalPages; page++)
                 {
                     int currentPage = page;
+
                     tasks.Add(Task.Run(async () =>
                     {
                         await semaphore.WaitAsync(); // acquire slot
@@ -90,18 +95,24 @@ namespace MyBackend.Services
                                 }
                             }
 
+                            // Print progress ONCE per page
                             if (showProgress)
                             {
-                                lock (bag)
+                                int progress = Interlocked.Increment(ref completedPages);
+
+                                lock (consoleLock)
                                 {
-                                    completedPages++;
-                                    Console.WriteLine($"Loading: ({completedPages * 100 / totalPages}%)");
+                                    Console.WriteLine($"Fetching page {currentPage} ({progress * 100 / totalPages}%)...");
+                                    Console.Out.Flush();
                                 }
                             }
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error fetching page {currentPage}: {ex.Message}");
+                            lock (consoleLock)
+                            {
+                                Console.WriteLine($"Error fetching page {currentPage}: {ex.Message}");
+                            }
                         }
                         finally
                         {
@@ -128,6 +139,7 @@ namespace MyBackend.Services
                 _refreshLock.Release();
             }
         }
+
 
         // Converts duration strings like "10-20 hours / weekly" into a single int (minimum hours)
         private int InferDurationHours(string duration)
@@ -160,17 +172,17 @@ namespace MyBackend.Services
             // Keyword mapping
             var keywords = new Dictionary<string, string[]>
             {
-                { "Environment", new[] { "environment", "conservation", "sustainability", "clean-up", "recycling" } },
-                { "Education", new[] { "education", "literacy" } },
+                { "Environment", new[] { "garbage", "conservation", "sustainability", "clean-up", "recycling", "outdoor" } },
+                { "Education", new[] { "education", "consultant", "reading", "literacy volunteers" } },
                 { "Tutor", new[] { "tutor", "mentoring", "teaching" } },
-                { "Healthcare", new[] { "healthcare", "medical", "nursing", "wellness", "mental health" } },
-                { "Animal Welfare", new[] { "animal", "pet", "wildlife", "rescue", "shelter" } },
-                { "Community Development", new[] { "community", "development", "housing", "food bank", "soup kitchen" } },
+                { "Healthcare", new[] { "healthcare", "medical", "nursing", "wellness", "mental health", "therapy" } },
+                { "Animal Welfare", new[] { "animal", "puppy", "wildlife", "rescue", "animal shelter", "pet therapy" } },
+                { "Community Development", new[] { "community", "development", "housing", "food bank", "soup kitchen", "archives" } },
                 { "Arts & Culture", new[] { "arts", "culture", "museum", "theater", "music" } },
-                { "Sports & Recreation", new[] { "sports", "recreation", "fitness", "coaching", "outdoors" } },
-                { "Fundraising/Accounting", new[] { "fundraising", "donor", "accountant", "accounting", "bookkeeping" } },
-                { "Event Support", new[] { "event", "festival", "fair", "conference", "setup", "support" } },
-                { "Programming", new[] { "programming", "developer", "software", "coding", "tech", "c#", "python", "web dev", "html" } },
+                { "Sports & Recreation", new[] { "sports", "fitness", "coaching", "outdoor" } },
+                { "Fundraising/Accounting", new[] { "fundraising", "donor", "accountant", "accounting", "bookkeeping", "treasurer", "secretary" } },
+                { "Event Support", new[] { "event", "festival", "fair", "conference", "setup", "casino", "secretary" } },
+                { "Programming & Tech", new[] { "programming", "developer", "software", "coding", "technology", "c#", "python", "web dev", "html", "graphics" } },
             };
 
             // Check each keyword
