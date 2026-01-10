@@ -12,7 +12,7 @@ const INTERESTS = [
     "Sports & Recreation",
     "Fundraising/Accounting",
     "Event Support",
-    "Programming",
+    "Programming & Tech",
 ];
 
 const AGES = ["13+", "18+"];
