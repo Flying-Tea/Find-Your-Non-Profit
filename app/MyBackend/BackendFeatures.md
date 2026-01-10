@@ -1,9 +1,10 @@
-**Main Backend Code Features Currently:**
+# Main Backend Code Features
 
 1. Abstraction/Aggregation Layer (VolunteerConnector)
 
 I used an API that has poor filitering support as I found that it had the most comprehensive free database I could easily access.
 It does the following:
+
 - Fetches all pages
 - Converted raw JSON API data into a useable and readable internal API model
 
@@ -22,22 +23,25 @@ It does the following:
 3. Custom Search Engine Ranking
 
 It filters based off:
+
 - Interests
 - Region (FUTURE ADD)
 - Age Eligibility
 - Remote vs In-person
 - Duration
+
 Using this it ranks based off of interest overlap and I limit the resulting data with Take(15)
 
-4. Semantic Inference (Light NLP)
+1. Semantic Inference (Light NLP)
 
 - Used unstructured text to infer:
     - interests via keyword mapping
     - age Eligibility
     - duration
+
 This is a very light proto-AI (I use the term AI very loosely here)
 
-5. Clean API
+1. Clean API
 
 - Single responsiblity endpoints
 - Query based filitering
@@ -46,7 +50,5 @@ This is a very light proto-AI (I use the term AI very loosely here)
 The frontend communicated exclusively with a single well-defined API endpoint (/api/Volunteer/search).
 All filtering happens in the backend with the VolunteerConnector only acting as a data source.
 This ensures a maintainable API and scale ready or to swap data sources if needed.
-
-
 
 Note: I decided not to use input validation as all inputs will be handled via a controlled frontend UI
