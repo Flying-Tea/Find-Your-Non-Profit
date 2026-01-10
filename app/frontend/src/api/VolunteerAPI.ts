@@ -41,7 +41,10 @@ export async function searchVolunteers(params: SearchParams) {
         
 
         return res.json() as Promise<VolunteerOpportunity[]>;
-    } catch {
+    } catch (err){
+        if (err instanceof TypeError) {
+            throw new Error("BACKEND_OFFLINE");
+        }
         return[];
     }
 

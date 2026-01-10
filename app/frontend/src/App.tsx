@@ -7,7 +7,6 @@ import { ResultsList } from './components/ResultsList';
 import DetailsPanel from './components/DetailsPanel';
 import { useSearchParams } from 'react-router-dom';
 
-
 function App() {
   const [results, setResults] = useState<VolunteerOpportunity[]>([]);
   const [selected, setSelected] = useState<VolunteerOpportunity | null>(null);
@@ -41,9 +40,8 @@ function App() {
       setResults(res);
       setSelected(prevSelected => prevSelected ?? (res[0] || null))
       setError(null);
-      
     } catch {
-      setError("Failed to fetch volunteer opportunities.");
+      setError("Failed to fetch volunteer opportunities. ");
     } finally {
       setIsFetching(false);
     }
@@ -66,9 +64,9 @@ function App() {
         <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded shadow">
           {error}
           <button onClick={() => {
-            window.location.reload();
             if (!lastParams) return; 
             HandleSearch(lastParams);
+            window.location.reload();
           }} 
             className="bg-white text-red-600 px-2 ml-2 py-1 rounded text-sm hover:bg-red-100"> Retry
           </button>
