@@ -32,7 +32,7 @@ It filters based off:
 
 Using this it ranks based off of interest overlap and I limit the resulting data with Take(15)
 
-1. Semantic Inference (Light NLP)
+4. Semantic Inference (Light NLP)
 
 - Used unstructured text to infer:
     - interests via keyword mapping
@@ -41,7 +41,7 @@ Using this it ranks based off of interest overlap and I limit the resulting data
 
 This is a very light proto-AI (I use the term AI very loosely here)
 
-1. Clean API
+5. Clean API
 
 - Single responsiblity endpoints
 - Query based filitering
